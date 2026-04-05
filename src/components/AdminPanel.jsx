@@ -90,6 +90,116 @@ const AdminPanel = () => {
     setUser(null);
   };
 
+  const handleCreateSchedule = async (e) => {
+    e.preventDefault();
+    try {
+      setProcessing(true);
+      const payload = { ...newExam };
+      if (!payload.end_date) delete payload.end_date;
+      await createSchedule(payload);
+      setMessage({ type: 'success', text: '일정이 추가되었습니다.' });
+      setShowAddSchedule(false);
+      setNewExam({ title: '', date: '', end_date: '', type: '중간' });
+      await loadAllData();
+    } catch (error) {
+      console.error('Error adding schedule:', error);
+      setMessage({ type: 'error', text: '일정 추가 중 오류가 발생했습니다.' });
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
+  };
+
+  const handleCreateNotice = async (e) => {
+    e.preventDefault();
+    if (!newNotice.title) return;
+    try {
+      setProcessing(true);
+      await createNotice(newNotice.title, newNotice.content);
+      setMessage({ type: 'success', text: '공지가 등록되었습니다.' });
+      setShowAddNotice(false);
+      setNewNotice({ title: '', content: '' });
+      await loadAllData();
+    } catch (error) {
+      console.error('Error adding notice:', error);
+      setMessage({ type: 'error', text: '공지 등록 실패' });
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
+  };
+
+  const handleDeleteSchedule = async (id) => {
+    if (!window.confirm('정말 삭제하시겠습니까?')) return;
+    try {
+      setProcessing(true);
+      await deleteSchedule(id);
+      await loadAllData();
+      setMessage({ type: 'success', text: '일정이 삭제되었습니다.' });
+    } catch (error) {
+      setMessage({ type: 'error', text: '삭제 실패' });
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
+  };
+
+  const handleDeleteNotice = async (id) => {
+    if (!window.confirm('공지를 삭제하시겠습니까?')) return;
+    try {
+      setProcessing(true);
+      await deleteNotice(id);
+      await loadAllData();
+      setMessage({ type: 'success', text: '공지가 삭제되었습니다.' });
+    } catch (error) {
+      setMessage({ type: 'error', text: '삭제 실패' });
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
+  };
+
+  const handleAddSubject = async (scheduleId, subjectName, examDate) => {
+    if (!subjectName || !examDate) return;
+    try {
+      setProcessing(true);
+      await createExamRange({ 
+        subject: subjectName, 
+        content: '', 
+        schedule_id: scheduleId,
+        exam_date: examDate 
+      });
+      await loadAllData();
+      setMessage({ type: 'success', text: '과목이 추가되었습니다.' });
+      toggleSubjectForm(scheduleId);
+    } catch (error) {
+      setMessage({ type: 'error', text: '과목 추가 실패' });
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 2000);
+    }
+  };
+
+  const toggleSubjectForm = (id) => {
+    setExpandedScheduleForms(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  const handleUpdateContent = async (rangeId, content) => {
+    try {
+      setProcessing(true);
+      await updateExamRange(rangeId, content);
+      setMessage({ type: 'success', text: '내용이 저장되었습니다.' });
+    } catch (error) {
+      setMessage({ type: 'error', text: '저장 실패' });
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 2000);
+    }
+  };
+
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center p-8 min-h-[400px]">

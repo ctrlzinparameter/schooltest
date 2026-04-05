@@ -14,7 +14,8 @@ import {
 } from '../api/examApi';
 
 const AdminPanel = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [schedules, setSchedules] = useState([]);
   const [notices, setNotices] = useState([]);
@@ -25,16 +26,33 @@ const AdminPanel = () => {
   // Toggles for forms
   const [showAddSchedule, setShowAddSchedule] = useState(false);
   const [showAddNotice, setShowAddNotice] = useState(false);
-  const [expandedScheduleForms, setExpandedScheduleForms] = useState({}); // Tracking "Add Subject" per schedule
+  const [expandedScheduleForms, setExpandedScheduleForms] = useState({});
 
   const [newExam, setNewExam] = useState({ title: '', date: '', end_date: '', type: '중간' });
   const [newNotice, setNewNotice] = useState({ title: '', content: '' });
 
   useEffect(() => {
-    if (isAuthenticated) {
-      loadAllData();
-    }
-  }, [isAuthenticated]);
+    // 세션 체크
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user || null);
+      if (session?.user) {
+        loadAllData();
+      }
+    };
+    checkUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+      if (session?.user) {
+        loadAllData();
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   const loadAllData = async () => {
     setLoading(true);
@@ -47,133 +65,67 @@ const AdminPanel = () => {
     setLoading(false);
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (password === '20260405tree') {
-      setIsAuthenticated(true);
-    } else {
-      setMessage({ type: 'error', text: '비밀번호가 올바르지 않습니다.' });
-      setTimeout(() => setMessage({ type: '', text: '' }), 2000);
-    }
-  };
-
-  const handleCreateSchedule = async (e) => {
-    e.preventDefault();
+    setProcessing(true);
     try {
-      setProcessing(true);
-      const payload = { ...newExam };
-      if (!payload.end_date) delete payload.end_date;
-      await createSchedule(payload);
-      setMessage({ type: 'success', text: '일정이 추가되었습니다.' });
-      setShowAddSchedule(false);
-      setNewExam({ title: '', date: '', end_date: '', type: '중간' });
-      await loadAllData();
-    } catch (error) {
-      setMessage({ type: 'error', text: '일정 추가 중 오류' });
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleCreateNotice = async (e) => {
-    e.preventDefault();
-    if (!newNotice.title) return;
-    try {
-      setProcessing(true);
-      await createNotice(newNotice.title, newNotice.content);
-      setMessage({ type: 'success', text: '공지가 등록되었습니다.' });
-      setShowAddNotice(false);
-      setNewNotice({ title: '', content: '' });
-      await loadAllData();
-    } catch (error) {
-      setMessage({ type: 'error', text: '공지 등록 실패' });
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleDeleteSchedule = async (id) => {
-    if (!window.confirm('정말 삭제하시겠습니까?')) return;
-    try {
-      setProcessing(true);
-      await deleteSchedule(id);
-      await loadAllData();
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleDeleteNotice = async (id) => {
-    if (!window.confirm('공지를 삭제하시겠습니까?')) return;
-    try {
-      setProcessing(true);
-      await deleteNotice(id);
-      await loadAllData();
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleAddSubject = async (scheduleId, subjectName, examDate) => {
-    if (!subjectName || !examDate) return;
-    try {
-      setProcessing(true);
-      await createExamRange({ 
-        subject: subjectName, 
-        content: '', 
-        schedule_id: scheduleId,
-        exam_date: examDate 
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
       });
-      await loadAllData();
-      setMessage({ type: 'success', text: '과목이 추가되었습니다.' });
-      // Close the form after adding
-      toggleSubjectForm(scheduleId);
+
+      if (error) throw error;
+      
+      setMessage({ type: 'success', text: '인증되었습니다.' });
     } catch (error) {
-      setMessage({ type: 'error', text: '과목 추가 실패' });
+      setMessage({ type: 'error', text: '로그인 실패: ' + (error.message === 'Invalid login credentials' ? '계정 정보가 올바르지 않습니다.' : error.message) });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } finally {
       setProcessing(false);
-      setTimeout(() => setMessage({ type: '', text: '' }), 2000);
     }
   };
 
-  const toggleSubjectForm = (id) => {
-    setExpandedScheduleForms(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
   };
 
-  const handleUpdateContent = async (rangeId, content) => {
-    try {
-      setProcessing(true);
-      await updateExamRange(rangeId, content);
-      setMessage({ type: 'success', text: '내용이 저장되었습니다.' });
-    } finally {
-      setProcessing(false);
-      setTimeout(() => setMessage({ type: '', text: '' }), 2000);
-    }
-  };
-
-  if (!isAuthenticated) {
+  if (!user) {
     return (
       <div className="flex flex-col items-center justify-center p-8 min-h-[400px]">
-        <div className="w-full max-w-sm rounded-4xl bg-white p-10 shadow-2xl border border-slate-100 text-center">
+        <div className="w-full max-w-sm rounded-[40px] bg-white p-10 shadow-2xl border border-slate-100 text-center">
           <div className="h-20 w-20 rounded-3xl bg-indigo-50 flex items-center justify-center text-indigo-600 mb-8 mx-auto shadow-inner">
             <Lock size={36} strokeWidth={2.5} />
           </div>
-          <h2 className="text-2xl font-black text-slate-800 mb-2 tracking-tighter">관리자 인증</h2>
-          <p className="text-[13px] font-bold text-slate-400 mb-8 italic">보안을 위해 비밀번호를 입력하세요.</p>
+          <h2 className="text-2xl font-black text-slate-800 mb-2 tracking-tighter">관리자 로그인</h2>
+          <p className="text-[13px] font-bold text-slate-400 mb-8 italic">인증된 관리자만 접근 가능합니다.</p>
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
-            <input 
-              type="password" autoFocus
-              className="w-full rounded-[24px] bg-slate-50 p-5 text-center text-3xl tracking-[1.2em] font-black border-2 border-transparent focus:border-indigo-200 focus:bg-white outline-none transition-all"
-              value={password} onChange={e => setPassword(e.target.value)}
-            />
-            <button className="w-full py-5 rounded-[24px] bg-slate-900 text-white font-black hover:bg-black transition-all shadow-xl active:scale-95">
-              관 리 자 로 그 인
+            <div className="flex flex-col gap-1.5 text-left">
+              <label className="text-[10px] font-black text-slate-400 ml-1 uppercase tracking-widest">Admin Email</label>
+              <input 
+                type="email" required
+                placeholder="admin@school.com"
+                className="w-full rounded-2xl bg-slate-50 p-4 text-[14px] font-bold outline-none border-2 border-transparent focus:border-indigo-100 focus:bg-white transition-all shadow-inner"
+                value={email} onChange={e => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5 text-left mb-2">
+              <label className="text-[10px] font-black text-slate-400 ml-1 uppercase tracking-widest">Password</label>
+              <input 
+                type="password" required
+                placeholder="••••••••"
+                className="w-full rounded-2xl bg-slate-50 p-4 text-[14px] font-bold outline-none border-2 border-transparent focus:border-indigo-100 focus:bg-white transition-all shadow-inner"
+                value={password} onChange={e => setPassword(e.target.value)}
+              />
+            </div>
+            <button disabled={processing} className="w-full py-5 rounded-2xl bg-slate-900 text-white font-black hover:bg-black transition-all shadow-xl active:scale-95 disabled:opacity-50">
+              {processing ? '인증 중...' : '로 그 인'}
             </button>
           </form>
-          {message.type === 'error' && <p className="mt-6 text-[11px] font-black text-rose-500 uppercase tracking-widest">{message.text}</p>}
+          {message.type === 'error' && <p className="mt-6 text-[11px] font-black text-rose-500 uppercase tracking-widest break-keep">{message.text}</p>}
+          <p className="mt-8 text-[10px] font-black text-slate-300">
+             * 대시보드에서 관리자 계정을 생성해야 합니다.
+          </p>
         </div>
       </div>
     );
@@ -182,10 +134,18 @@ const AdminPanel = () => {
   return (
     <div className="flex flex-col gap-8 p-2 pb-32 h-full overflow-y-auto scrollbar-hide">
       <header className="flex items-center justify-between sticky top-0 py-4 bg-slate-50/80 backdrop-blur-md z-30">
-        <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2 tracking-tighter">
-           <Settings className="text-indigo-600" size={24} /> 관리 센터
-        </h2>
-        {loading && <Loader2 size={20} className="animate-spin text-slate-300" />}
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2 tracking-tighter">
+            <Settings className="text-indigo-600" size={24} /> 관리 센터
+          </h2>
+          {loading && <Loader2 size={20} className="animate-spin text-slate-300" />}
+        </div>
+        <button 
+          onClick={handleLogout}
+          className="px-4 py-2 rounded-xl bg-slate-200 text-slate-600 text-[11px] font-black hover:bg-rose-50 hover:text-rose-600 transition-all active:scale-95"
+        >
+          LOGOUT
+        </button>
       </header>
 
       {message.text && (

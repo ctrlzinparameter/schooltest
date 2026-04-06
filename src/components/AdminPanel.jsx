@@ -182,7 +182,7 @@ const AdminPanel = () => {
     }
   };
 
-  const handleAddSubject = async (scheduleId, subjectName, examDate) => {
+  const handleAddSubject = async (scheduleId, subjectName, examDate, materialUrl = '') => {
     if (!subjectName || !examDate) return;
     try {
       setProcessing(true);
@@ -190,7 +190,8 @@ const AdminPanel = () => {
         subject: subjectName, 
         content: '', 
         schedule_id: scheduleId,
-        exam_date: examDate 
+        exam_date: examDate,
+        material_url: materialUrl
       });
       await loadAllData();
       setMessage({ type: 'success', text: '과목이 추가되었습니다.' });
@@ -211,11 +212,11 @@ const AdminPanel = () => {
     }));
   };
 
-  const handleUpdateContent = async (rangeId, content) => {
+  const handleUpdateSubject = async (rangeId, updates) => {
     try {
       setProcessing(true);
-      await updateExamRange(rangeId, content);
-      setMessage({ type: 'success', text: '내용이 저장되었습니다.' });
+      await updateExamRange(rangeId, updates);
+      setMessage({ type: 'success', text: '정보가 저장되었습니다.' });
     } catch (error) {
       const isAuthError = error.message?.includes('JWT') || error.code === '42501' || error.status === 403;
       setMessage({ type: 'error', text: isAuthError ? '저장 권한이 없습니다.' : '저장 실패' });
@@ -697,9 +698,19 @@ const AdminPanel = () => {
                     <textarea 
                       className="w-full text-[13px] font-bold text-slate-500 outline-none resize-none bg-slate-50/30 p-3 rounded-2xl border border-transparent focus:border-slate-100 focus:bg-white min-h-[80px] transition-all leading-relaxed"
                       defaultValue={range.content || ''}
-                      onBlur={(e) => handleUpdateContent(range.id, e.target.value)}
+                      onBlur={(e) => handleUpdateSubject(range.id, { content: e.target.value })}
                       placeholder="시험 범위를 입력하세요."
                     />
+                    <div className="flex flex-col gap-1 mt-1">
+                      <label className="text-[9px] font-black text-slate-400 ml-1 uppercase tracking-widest">학습자료 링크 (구글 드라이브 등)</label>
+                      <input 
+                        type="url"
+                        className="w-full text-[13px] font-bold text-indigo-600 outline-none bg-slate-50/30 p-3 rounded-2xl border border-transparent focus:border-indigo-100 focus:bg-white transition-all"
+                        defaultValue={range.material_url || ''}
+                        onBlur={(e) => handleUpdateSubject(range.id, { material_url: e.target.value })}
+                        placeholder="https://drive.google.com/..."
+                      />
+                    </div>
                   </div>
                 ))}
 
@@ -752,11 +763,21 @@ const AdminPanel = () => {
                                 />
                               </div>
                             </div>
+                            <div className="flex flex-col gap-1 px-1">
+                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Study Material Link (Optional)</label>
+                              <input 
+                                type="url"
+                                placeholder="https://drive.google.com/..."
+                                className="rounded-[18px] bg-white p-4 text-[13px] font-black border border-slate-100 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                                id={`subj-link-${exam.id}`}
+                              />
+                            </div>
                             <button 
                               onClick={() => {
                                 const name = document.getElementById(`subj-name-${exam.id}`).value;
                                 const date = document.getElementById(`subj-date-${exam.id}`).value;
-                                handleAddSubject(exam.id, name, date);
+                                const link = document.getElementById(`subj-link-${exam.id}`).value;
+                                handleAddSubject(exam.id, name, date, link);
                               }}
                               className="w-full py-4 rounded-[20px] bg-indigo-600 text-white font-black text-xs hover:bg-slate-900 transition-all shadow-xl shadow-indigo-600/20 active:scale-95"
                             >

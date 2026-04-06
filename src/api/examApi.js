@@ -67,10 +67,10 @@ export const fetchPastSchedules = async () => {
  * @param {string} rangeId - exam_subject_ranges 테이블의 ID
  * @param {string} newContent - 업데이트할 시험 범위 텍스트
  */
-export const updateExamRange = async (rangeId, newContent) => {
+export const updateExamRange = async (rangeId, updates) => {
   const { data, error } = await supabase
     .from('exam_subject_ranges')
-    .update({ content: newContent })
+    .update(updates)
     .eq('id', rangeId)
     .select(); // 업데이트된 결과 반환
 
@@ -125,7 +125,8 @@ export const createExamRange = async (range) => {
       subject: range.subject,
       content: range.content,
       schedule_id: range.schedule_id,
-      exam_date: range.exam_date // 추가된 필드
+      exam_date: range.exam_date,
+      material_url: range.material_url // 추가된 필드
     }])
     .select();
 

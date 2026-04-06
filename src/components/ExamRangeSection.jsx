@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, AlertCircle, Search, User, ChevronRight, Hash } from 'lucide-react';
+import { BookOpen, AlertCircle, Search, User, ChevronRight, Hash, ExternalLink, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ExamRangeSection = ({ subjects }) => {
@@ -76,6 +76,29 @@ const ExamRangeSection = ({ subjects }) => {
                         <p className="text-[14px] font-bold leading-relaxed text-slate-600 tracking-tight">
                           {s.range}
                         </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 학습자료 섹션 */}
+                  <div className="flex flex-col gap-2 mt-2">
+                    <div className="flex items-center gap-2 px-1">
+                      <FileText size={14} className="text-slate-400" />
+                      <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider">학습자료</span>
+                    </div>
+                    {s.material_url ? (
+                      <a 
+                        href={s.material_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between bg-slate-50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 rounded-2xl p-4 transition-all group/link"
+                      >
+                        <span className="text-[13px] font-bold text-indigo-600 truncate mr-2">구글 드라이브 자료 확인</span>
+                        <ExternalLink size={14} className="text-indigo-400 group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform" />
+                      </a>
+                    ) : (
+                      <div className="bg-slate-50/50 border border-dashed border-slate-200 rounded-2xl p-4">
+                        <p className="text-[12px] font-bold text-slate-300 italic">아직 공유된 자료가 없습니다!</p>
                       </div>
                     )}
                   </div>

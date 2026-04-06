@@ -87,6 +87,7 @@ const App = () => {
     id: r.id,
     name: r.subject,
     range: r.content || '추후 공지 예정',
+    material_url: r.material_url,
     teacher: '담당 교사' 
   })) || [];
 

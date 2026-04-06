@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, Trash2, RefreshCw as Loader2, CheckCircle2, AlertCircle, Lock, Calendar, BookOpen, ArrowRight, Settings, Bell as Megaphone, ChevronDown, ChevronUp, Clock, HelpCircle as Info } from 'lucide-react';
+import { Save, Plus, Trash2, RefreshCw as Loader2, CheckCircle2, AlertCircle, Lock, Calendar, BookOpen, ArrowRight, Settings, Bell as Megaphone, ChevronDown, ChevronUp, Clock, HelpCircle as Info, Globe, Link } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { 
@@ -10,7 +10,10 @@ import {
   createExamRange,
   fetchNotices,
   createNotice,
-  deleteNotice
+  deleteNotice,
+  fetchExtraLinks,
+  createExtraLink,
+  deleteExtraLink
 } from '../api/examApi';
 
 const AdminPanel = () => {
@@ -22,14 +25,17 @@ const AdminPanel = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [extraLinks, setExtraLinks] = useState([]);
 
   // Toggles for forms
   const [showAddSchedule, setShowAddSchedule] = useState(false);
   const [showAddNotice, setShowAddNotice] = useState(false);
+  const [showAddLink, setShowAddLink] = useState(false);
   const [expandedScheduleForms, setExpandedScheduleForms] = useState({});
 
   const [newExam, setNewExam] = useState({ title: '', date: '', end_date: '', type: '중간' });
   const [newNotice, setNewNotice] = useState({ title: '', content: '' });
+  const [newLink, setNewLink] = useState({ title: '', url: '', description: '' });
 
   useEffect(() => {
     // 세션 체크
@@ -56,12 +62,14 @@ const AdminPanel = () => {
 
   const loadAllData = async () => {
     setLoading(true);
-    const [scheduleData, noticeData] = await Promise.all([
+    const [scheduleData, noticeData, linkData] = await Promise.all([
       fetchAllSchedules(),
-      fetchNotices()
+      fetchNotices(),
+      fetchExtraLinks()
     ]);
     if (scheduleData) setSchedules(scheduleData);
     if (noticeData) setNotices(noticeData);
+    if (linkData) setExtraLinks(linkData);
     setLoading(false);
   };
 
@@ -103,7 +111,11 @@ const AdminPanel = () => {
       await loadAllData();
     } catch (error) {
       console.error('Error adding schedule:', error);
-      setMessage({ type: 'error', text: '일정 추가 중 오류가 발생했습니다.' });
+      const isAuthError = error.message?.includes('JWT') || error.code === '42501' || error.status === 403;
+      setMessage({ 
+        type: 'error', 
+        text: isAuthError ? '관리자 권한이 없습니다. 다시 로그인해 주세요.' : '일정 추가 중 오류가 발생했습니다.' 
+      });
     } finally {
       setProcessing(false);
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
@@ -122,7 +134,8 @@ const AdminPanel = () => {
       await loadAllData();
     } catch (error) {
       console.error('Error adding notice:', error);
-      setMessage({ type: 'error', text: '공지 등록 실패' });
+      const isAuthError = error.message?.includes('JWT') || error.code === '42501' || error.status === 403;
+      setMessage({ type: 'error', text: isAuthError ? '인증 오류: 관리자 권한이 만료되었습니다.' : '공지 등록 실패' });
     } finally {
       setProcessing(false);
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
@@ -137,7 +150,8 @@ const AdminPanel = () => {
       await loadAllData();
       setMessage({ type: 'success', text: '일정이 삭제되었습니다.' });
     } catch (error) {
-      setMessage({ type: 'error', text: '삭제 실패' });
+      const isAuthError = error.message?.includes('JWT') || error.code === '42501' || error.status === 403;
+      setMessage({ type: 'error', text: isAuthError ? '제한된 작업: 관리자만 가능합니다.' : '삭제 실패' });
     } finally {
       setProcessing(false);
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
@@ -152,7 +166,8 @@ const AdminPanel = () => {
       await loadAllData();
       setMessage({ type: 'success', text: '공지가 삭제되었습니다.' });
     } catch (error) {
-      setMessage({ type: 'error', text: '삭제 실패' });
+      const isAuthError = error.message?.includes('JWT') || error.code === '42501' || error.status === 403;
+      setMessage({ type: 'error', text: isAuthError ? '세션 만료: 다시 로그인해 주세요.' : '삭제 실패' });
     } finally {
       setProcessing(false);
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
@@ -173,7 +188,8 @@ const AdminPanel = () => {
       setMessage({ type: 'success', text: '과목이 추가되었습니다.' });
       toggleSubjectForm(scheduleId);
     } catch (error) {
-      setMessage({ type: 'error', text: '과목 추가 실패' });
+      const isAuthError = error.message?.includes('JWT') || error.code === '42501' || error.status === 403;
+      setMessage({ type: 'error', text: isAuthError ? '권한 거부' : '과목 추가 실패' });
     } finally {
       setProcessing(false);
       setTimeout(() => setMessage({ type: '', text: '' }), 2000);
@@ -193,10 +209,47 @@ const AdminPanel = () => {
       await updateExamRange(rangeId, content);
       setMessage({ type: 'success', text: '내용이 저장되었습니다.' });
     } catch (error) {
-      setMessage({ type: 'error', text: '저장 실패' });
+      const isAuthError = error.message?.includes('JWT') || error.code === '42501' || error.status === 403;
+      setMessage({ type: 'error', text: isAuthError ? '저장 권한이 없습니다.' : '저장 실패' });
     } finally {
       setProcessing(false);
       setTimeout(() => setMessage({ type: '', text: '' }), 2000);
+    }
+  };
+
+  const handleCreateExtraLink = async (e) => {
+    e.preventDefault();
+    if (!newLink.title || !newLink.url) return;
+    try {
+      setProcessing(true);
+      await createExtraLink(newLink.title, newLink.url, newLink.description);
+      setMessage({ type: 'success', text: '링크가 추가되었습니다.' });
+      setShowAddLink(false);
+      setNewLink({ title: '', url: '', description: '' });
+      await loadAllData();
+    } catch (error) {
+      console.error('Error adding link:', error);
+      const isAuthError = error.message?.includes('JWT') || error.code === '42501' || error.status === 403;
+      setMessage({ type: 'error', text: isAuthError ? '권한 없음' : '링크 추가 실패' });
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
+  };
+
+  const handleDeleteExtraLink = async (id) => {
+    if (!window.confirm('링크를 삭제하시겠습니까?')) return;
+    try {
+      setProcessing(true);
+      await deleteExtraLink(id);
+      await loadAllData();
+      setMessage({ type: 'success', text: '링크가 삭제되었습니다.' });
+    } catch (error) {
+      const isAuthError = error.message?.includes('JWT') || error.code === '42501' || error.status === 403;
+      setMessage({ type: 'error', text: isAuthError ? '권한 거부' : '삭제 실패' });
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     }
   };
 
@@ -324,6 +377,86 @@ const AdminPanel = () => {
             </div>
           ))}
           {notices.length === 0 && <p className="text-center text-[11px] font-bold text-slate-300 py-4 italic">No active notices.</p>}
+        </div>
+      </section>
+
+      {/* --- 추가 사이트(링크) 관리 섹션 --- */}
+      <section className="flex flex-col gap-4 bg-white rounded-[32px] p-6 shadow-soft border border-slate-100">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 lowercase tracking-tighter">
+            <Globe size={20} className="text-indigo-600" /> link manager
+          </h3>
+          <button 
+            onClick={() => setShowAddLink(!showAddLink)}
+            className={`rounded-xl p-2 transition-all ${showAddLink ? 'bg-slate-100 text-slate-400 rotate-45' : 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'}`}
+          >
+            <Plus size={20} />
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {showAddLink && (
+            <motion.form 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              onSubmit={handleCreateExtraLink} 
+              className="flex flex-col gap-4 overflow-hidden"
+            >
+              <div className="h-px bg-slate-50 w-full mb-2" />
+              <div className="flex flex-col gap-1.5 px-1">
+                <label className="text-[10px] font-black text-slate-400 ml-1 uppercase tracking-widest">Site Title</label>
+                <input required
+                  placeholder="예: 단어 암기 도우미"
+                  className="w-full rounded-2xl bg-slate-50 p-4 text-[13px] font-bold outline-none border border-transparent focus:border-indigo-100 focus:bg-white transition-all shadow-inner"
+                  value={newLink.title} onChange={e => setNewLink({...newLink, title: e.target.value})}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 px-1">
+                <label className="text-[10px] font-black text-slate-400 ml-1 uppercase tracking-widest">URL Address</label>
+                <input required type="url"
+                  placeholder="https://example.com"
+                  className="w-full rounded-2xl bg-slate-50 p-4 text-[13px] font-bold outline-none border border-transparent focus:border-indigo-100 focus:bg-white transition-all shadow-inner"
+                  value={newLink.url} onChange={e => setNewLink({...newLink, url: e.target.value})}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 px-1">
+                <label className="text-[10px] font-black text-slate-400 ml-1 uppercase tracking-widest">Short Description</label>
+                <input 
+                  placeholder="사이트에 대한 간단한 설명"
+                  className="w-full rounded-2xl bg-slate-50 p-4 text-[13px] font-bold outline-none border border-transparent focus:border-indigo-100 focus:bg-white transition-all shadow-inner"
+                  value={newLink.description} onChange={e => setNewLink({...newLink, description: e.target.value})}
+                />
+              </div>
+              <button disabled={processing} className="py-4 rounded-2xl bg-indigo-600 text-white font-black text-sm hover:shadow-xl active:scale-95 transition-all mt-2">
+                {processing ? 'Processing...' : '링크 등록하기'}
+              </button>
+            </motion.form>
+          )}
+        </AnimatePresence>
+
+        <div className="flex flex-col gap-3 mt-2">
+          {extraLinks.map(link => (
+            <div key={link.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl group">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center text-indigo-400 shadow-sm flex-shrink-0">
+                   <Link size={16} />
+                </div>
+                <div className="flex flex-col overflow-hidden">
+                  <span className="text-[13px] font-black text-slate-700 truncate">{link.title}</span>
+                  <span className="text-[10px] font-bold text-slate-300 truncate">{link.url}</span>
+                </div>
+              </div>
+              <button onClick={() => handleDeleteExtraLink(link.id)} className="p-2 text-slate-200 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+          {extraLinks.length === 0 && (
+            <div className="py-10 text-center">
+               <p className="text-[11px] font-bold text-slate-300 italic">No extra sites registered.</p>
+            </div>
+          )}
         </div>
       </section>
 

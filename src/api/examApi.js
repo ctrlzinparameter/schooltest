@@ -183,3 +183,51 @@ export const deleteNotice = async (id) => {
   }
   return true;
 };
+
+/**
+ * 10. 추가 사이트(링크) 가져오기
+ */
+export const fetchExtraLinks = async () => {
+  const { data, error } = await supabase
+    .from('extra_links')
+    .select('*')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching extra links:', error);
+    return null;
+  }
+  return data;
+};
+
+/**
+ * 11. 추가 사이트(링크) 추가
+ */
+export const createExtraLink = async (title, url, description = '') => {
+  const { data, error } = await supabase
+    .from('extra_links')
+    .insert([{ title, url, description }])
+    .select();
+
+  if (error) {
+    console.error('Error creating extra link:', error);
+    throw error;
+  }
+  return data[0];
+};
+
+/**
+ * 12. 추가 사이트(링크) 삭제
+ */
+export const deleteExtraLink = async (id) => {
+  const { error } = await supabase
+    .from('extra_links')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting extra link:', error);
+    throw error;
+  }
+  return true;
+};

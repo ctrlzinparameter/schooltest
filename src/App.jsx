@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Book, Calendar, Bell, ChevronRight, Menu, RefreshCw as Loader2, Settings, Shield, AlertTriangle, X, MessageCircle as Instagram, HelpCircle as Info, Bell as Megaphone } from 'lucide-react';
+import { Home, Book, Calendar, Bell, ChevronRight, Menu, RefreshCw as Loader2, Settings, Shield, AlertTriangle, X, MessageCircle as Instagram, HelpCircle as Info, Bell as Megaphone, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DDayHero from './components/DDayHero';
 import ScheduleCard from './components/ScheduleCard';
 import ExamRangeSection from './components/ExamRangeSection';
 import AdminPanel from './components/AdminPanel';
-import { fetchAllSchedules, fetchNotices } from './api/examApi';
+import { fetchAllSchedules, fetchNotices, fetchExtraLinks } from './api/examApi';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [schedules, setSchedules] = useState([]);
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [extraLinks, setExtraLinks] = useState([]);
   const [error, setError] = useState(null);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [expandedScheduleId, setExpandedScheduleId] = useState(null);
@@ -21,9 +22,10 @@ const App = () => {
       try {
         setLoading(true);
         // 모든 데이터를 병렬로 병합 로드
-        const [scheduleData, noticeData] = await Promise.all([
+        const [scheduleData, noticeData, linkData] = await Promise.all([
           fetchAllSchedules(),
-          fetchNotices()
+          fetchNotices(),
+          fetchExtraLinks()
         ]);
 
         if (scheduleData) {
@@ -32,6 +34,9 @@ const App = () => {
         }
         if (noticeData) {
           setNotices(noticeData);
+        }
+        if (linkData) {
+          setExtraLinks(linkData);
         }
       } catch (err) {
         console.error('Failed to fetch data:', err);
@@ -281,6 +286,56 @@ const App = () => {
               </motion.div>
             )}
 
+            {activeTab === 'links' && (
+              <motion.div 
+                key="links"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="flex flex-col gap-6"
+              >
+                <div className="px-3">
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tighter leading-none mb-2">추가<br/>사이트</h2>
+                  <div className="h-1 w-12 bg-indigo-600 rounded-full mb-4" />
+                  <p className="text-sm font-bold text-slate-400 leading-tight">개발자가 제작한 다른 유용한 사이트들입니다.</p>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-4">
+                  {extraLinks.length > 0 ? (
+                    extraLinks.map((link) => (
+                      <a 
+                        key={link.id} 
+                        href={link.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="group rounded-[32px] bg-white p-6 shadow-soft border border-slate-100 flex items-center justify-between hover:border-indigo-200 transition-all active:scale-98"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                            <Globe size={24} />
+                          </div>
+                          <div className="flex flex-col">
+                            <h3 className="text-sm font-black text-slate-800">{link.title}</h3>
+                            <p className="text-[11px] font-bold text-slate-400 line-clamp-1">{link.description || link.url}</p>
+                          </div>
+                        </div>
+                        <div className="h-8 w-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:text-indigo-600 group-hover:bg-indigo-50 transition-all">
+                          <ChevronRight size={18} />
+                        </div>
+                      </a>
+                    ))
+                  ) : (
+                    <div className="py-20 text-center flex flex-col items-center gap-4">
+                      <div className="h-20 w-20 rounded-full bg-slate-50 flex items-center justify-center text-slate-200">
+                        <Globe size={40} />
+                      </div>
+                      <p className="text-slate-300 font-black italic">등록된 사이트가 없습니다.</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
             {activeTab === 'notice' && (
               <motion.div 
                 key="notice"
@@ -413,10 +468,11 @@ const App = () => {
       </div>
 
       {/* Modern Bottom Navigation */}
-      <nav className="fixed bottom-0 left-1/2 flex h-24 w-full max-w-md -translate-x-1/2 items-center justify-around bg-white/70 backdrop-blur-2xl border-t border-slate-100/50 px-8 pb-6 z-[100] shadow-[0_-10px_30px_-10px_rgba(0,0,0,0.05)]">
+      <nav className="fixed bottom-0 left-1/2 flex h-24 w-full max-w-md -translate-x-1/2 items-center justify-around bg-white/70 backdrop-blur-2xl border-t border-slate-100/50 px-4 pb-6 z-[100] shadow-[0_-10px_30px_-10px_rgba(0,0,0,0.05)]">
         {[
           { id: 'home', icon: Home, label: '홈' },
           { id: 'notice', icon: Megaphone, label: '공지' },
+          { id: 'links', icon: Globe, label: '링크' },
           { id: 'range', icon: Book, label: '범위' },
           { id: 'schedule', icon: Calendar, label: '일정' },
         ].map((tab) => (

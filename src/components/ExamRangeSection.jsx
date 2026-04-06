@@ -5,6 +5,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 const ExamRangeSection = ({ subjects }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
+  const ensureAbsoluteUrl = (url) => {
+    if (!url) return '';
+    // 이미 http:// 또는 https://로 시작하는지 확인
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+    // 그렇지 않다면 https://를 앞에 붙여줌
+    return `https://${url}`;
+  };
+
   const filteredSubjects = subjects.filter(s => 
     s.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -88,7 +98,7 @@ const ExamRangeSection = ({ subjects }) => {
                     </div>
                     {s.material_url ? (
                       <a 
-                        href={s.material_url} 
+                        href={ensureAbsoluteUrl(s.material_url)} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="flex items-center justify-between bg-slate-50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 rounded-2xl p-4 transition-all group/link"

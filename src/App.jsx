@@ -118,6 +118,12 @@ const App = () => {
     });
   };
 
+  const ensureAbsoluteUrl = (url) => {
+    if (!url) return '';
+    if (/^https?:\/\//i.test(url)) return url;
+    return `https://${url}`;
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -356,7 +362,7 @@ const App = () => {
                     extraLinks.map((link) => (
                       <a 
                         key={link.id} 
-                        href={link.url} 
+                        href={ensureAbsoluteUrl(link.url)} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="group rounded-[32px] bg-white p-6 shadow-soft border border-slate-100 flex items-center justify-between hover:border-indigo-200 transition-all active:scale-98"

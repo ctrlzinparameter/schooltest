@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Book, Calendar, Bell, ChevronRight, Menu, RefreshCw as Loader2, Settings, Shield, AlertTriangle, X, MessageCircle as Instagram, HelpCircle as Info, Bell as Megaphone, Globe } from 'lucide-react';
+import { Home, Book, Calendar, Bell, ChevronRight, Menu, RefreshCw as Loader2, Settings, Shield, AlertTriangle, X, MessageCircle as Instagram, HelpCircle as Info, Bell as Megaphone, Globe, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DDayHero from './components/DDayHero';
 import ScheduleCard from './components/ScheduleCard';
 import ExamRangeSection from './components/ExamRangeSection';
 import AdminPanel from './components/AdminPanel';
-import { fetchAllSchedules, fetchNotices, fetchExtraLinks } from './api/examApi';
+import MealCard from './components/MealCard';
+import { fetchAllSchedules, fetchNotices, fetchExtraLinks, fetchStudentEvents } from './api/examApi';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('home');
@@ -13,6 +14,7 @@ const App = () => {
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [extraLinks, setExtraLinks] = useState([]);
+  const [studentEvents, setStudentEvents] = useState([]);
   const [error, setError] = useState(null);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [expandedScheduleId, setExpandedScheduleId] = useState(null);
@@ -22,10 +24,11 @@ const App = () => {
       try {
         setLoading(true);
         // 모든 데이터를 병렬로 병합 로드
-        const [scheduleData, noticeData, linkData] = await Promise.all([
+        const [scheduleData, noticeData, linkData, eventData] = await Promise.all([
           fetchAllSchedules(),
           fetchNotices(),
-          fetchExtraLinks()
+          fetchExtraLinks(),
+          fetchStudentEvents()
         ]);
 
         if (scheduleData) {
@@ -37,6 +40,9 @@ const App = () => {
         }
         if (linkData) {
           setExtraLinks(linkData);
+        }
+        if (eventData) {
+          setStudentEvents(eventData);
         }
       } catch (err) {
         console.error('Failed to fetch data:', err);
@@ -218,6 +224,47 @@ const App = () => {
                   </div>
                 )}
 
+                {/* 학생회 이벤트 섹션 (D-Day 아래, 공지 위) */}
+                {studentEvents.length > 0 && (
+                  <section className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between px-3">
+                      <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+                        <Star size={18} className="text-amber-500 fill-amber-500" /> 학생회 이벤트
+                      </h2>
+                    </div>
+                    <div className="flex flex-col gap-4">
+                      {studentEvents.map(event => (
+                        <div 
+                          key={event.id}
+                          className="rounded-[32px] bg-white p-6 shadow-soft border border-slate-100 flex flex-col gap-4 relative overflow-hidden group hover:border-amber-200 transition-all"
+                        >
+                          {event.image_url && (
+                            <div className="w-full h-40 rounded-[24px] overflow-hidden mb-2">
+                              <img src={event.image_url} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                            </div>
+                          )}
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-lg font-black text-slate-800 tracking-tight">{event.title}</h3>
+                              {event.event_date && (
+                                <span className="text-[10px] font-black bg-amber-50 text-amber-600 px-2.5 py-1 rounded-lg uppercase tracking-tighter">
+                                  {event.event_date}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[13px] font-bold text-slate-500 leading-relaxed whitespace-pre-wrap">
+                              {event.content}
+                            </p>
+                          </div>
+                          <div className="absolute top-0 right-0 p-4 opacity-[0.03] rotate-12">
+                            <Star size={80} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
                 {/* 실시간 공지 게시판 (Status Report 대체) */}
                 <section className="flex flex-col gap-4">
                   <div className="flex items-center justify-between px-3">
@@ -255,6 +302,9 @@ const App = () => {
                     )}
                   </div>
                 </section>
+
+                {/* 오늘의 급식 위젯 */}
+                <MealCard />
 
                 <section className="flex flex-col gap-4">
                   <div className="flex items-center justify-between px-3">

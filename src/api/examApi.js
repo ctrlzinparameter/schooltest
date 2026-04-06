@@ -231,3 +231,51 @@ export const deleteExtraLink = async (id) => {
   }
   return true;
 };
+
+/**
+ * 13. 학생회 이벤트 가져오기
+ */
+export const fetchStudentEvents = async () => {
+  const { data, error } = await supabase
+    .from('student_council_events')
+    .select('*')
+    .order('event_date', { ascending: true }); // 날짜순 정렬
+
+  if (error) {
+    console.error('Error fetching student events:', error);
+    return null;
+  }
+  return data;
+};
+
+/**
+ * 14. 학생회 이벤트 추가
+ */
+export const createStudentEvent = async (eventData) => {
+  const { data, error } = await supabase
+    .from('student_council_events')
+    .insert([eventData])
+    .select();
+
+  if (error) {
+    console.error('Error creating student event:', error);
+    throw error;
+  }
+  return data[0];
+};
+
+/**
+ * 15. 학생회 이벤트 삭제
+ */
+export const deleteStudentEvent = async (id) => {
+  const { error } = await supabase
+    .from('student_council_events')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting student event:', error);
+    throw error;
+  }
+  return true;
+};

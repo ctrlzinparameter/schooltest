@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, Trash2, RefreshCw as Loader2, CheckCircle2, AlertCircle, Lock, Calendar, BookOpen, ArrowRight, Settings, Bell as Megaphone, ChevronDown, ChevronUp, Clock, HelpCircle as Info, Globe, Link } from 'lucide-react';
+import { Save, Plus, Trash2, RefreshCw as Loader2, CheckCircle2, AlertCircle, Lock, Calendar, BookOpen, ArrowRight, Settings, Bell as Megaphone, ChevronDown, ChevronUp, Clock, HelpCircle as Info, Globe, Link, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { 
@@ -13,7 +13,10 @@ import {
   deleteNotice,
   fetchExtraLinks,
   createExtraLink,
-  deleteExtraLink
+  deleteExtraLink,
+  fetchStudentEvents,
+  createStudentEvent,
+  deleteStudentEvent
 } from '../api/examApi';
 
 const AdminPanel = () => {
@@ -26,16 +29,19 @@ const AdminPanel = () => {
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [extraLinks, setExtraLinks] = useState([]);
+  const [studentEvents, setStudentEvents] = useState([]);
 
   // Toggles for forms
   const [showAddSchedule, setShowAddSchedule] = useState(false);
   const [showAddNotice, setShowAddNotice] = useState(false);
   const [showAddLink, setShowAddLink] = useState(false);
+  const [showAddEvent, setShowAddEvent] = useState(false);
   const [expandedScheduleForms, setExpandedScheduleForms] = useState({});
 
   const [newExam, setNewExam] = useState({ title: '', date: '', end_date: '', type: '중간' });
   const [newNotice, setNewNotice] = useState({ title: '', content: '' });
   const [newLink, setNewLink] = useState({ title: '', url: '', description: '' });
+  const [newEvent, setNewEvent] = useState({ title: '', content: '', event_date: '', image_url: '' });
 
   useEffect(() => {
     // 세션 체크
@@ -62,14 +68,16 @@ const AdminPanel = () => {
 
   const loadAllData = async () => {
     setLoading(true);
-    const [scheduleData, noticeData, linkData] = await Promise.all([
+    const [scheduleData, noticeData, linkData, eventData] = await Promise.all([
       fetchAllSchedules(),
       fetchNotices(),
-      fetchExtraLinks()
+      fetchExtraLinks(),
+      fetchStudentEvents()
     ]);
     if (scheduleData) setSchedules(scheduleData);
     if (noticeData) setNotices(noticeData);
     if (linkData) setExtraLinks(linkData);
+    if (eventData) setStudentEvents(eventData);
     setLoading(false);
   };
 
@@ -247,6 +255,42 @@ const AdminPanel = () => {
     } catch (error) {
       const isAuthError = error.message?.includes('JWT') || error.code === '42501' || error.status === 403;
       setMessage({ type: 'error', text: isAuthError ? '권한 거부' : '삭제 실패' });
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
+  };
+
+  const handleCreateStudentEvent = async (e) => {
+    e.preventDefault();
+    if (!newEvent.title) return;
+    try {
+      setProcessing(true);
+      await createStudentEvent(newEvent);
+      setMessage({ type: 'success', text: '이벤트가 등록되었습니다.' });
+      setShowAddEvent(false);
+      setNewEvent({ title: '', content: '', event_date: '', image_url: '' });
+      await loadAllData();
+    } catch (error) {
+      console.error('Error adding event:', error);
+      const isAuthError = error.message?.includes('JWT') || error.code === '42501' || error.status === 403;
+      setMessage({ type: 'error', text: isAuthError ? '제한된 권한: 학생회 담당자만 가능합니다.' : '이벤트 등록 실패' });
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
+  };
+
+  const handleDeleteStudentEvent = async (id) => {
+    if (!window.confirm('이벤트를 삭제하시겠습니까?')) return;
+    try {
+      setProcessing(true);
+      await deleteStudentEvent(id);
+      await loadAllData();
+      setMessage({ type: 'success', text: '이벤트가 삭제되었습니다.' });
+    } catch (error) {
+      const isAuthError = error.message?.includes('JWT') || error.code === '42501' || error.status === 403;
+      setMessage({ type: 'error', text: isAuthError ? '권한 없음: 삭제할 수 없습니다.' : '삭제 실패' });
     } finally {
       setProcessing(false);
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
@@ -455,6 +499,89 @@ const AdminPanel = () => {
           {extraLinks.length === 0 && (
             <div className="py-10 text-center">
                <p className="text-[11px] font-bold text-slate-300 italic">No extra sites registered.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* --- 학생회 이벤트 관리 섹션 --- */}
+      <section className="flex flex-col gap-4 bg-white rounded-[32px] p-6 shadow-soft border border-slate-100">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 lowercase tracking-tighter">
+            <Star size={20} className="text-amber-500 fill-amber-500" /> event manager
+          </h3>
+          <button 
+            onClick={() => setShowAddEvent(!showAddEvent)}
+            className={`rounded-xl p-2 transition-all ${showAddEvent ? 'bg-slate-100 text-slate-400 rotate-45' : 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'}`}
+          >
+            <Plus size={20} />
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {showAddEvent && (
+            <motion.form 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              onSubmit={handleCreateStudentEvent} 
+              className="flex flex-col gap-4 overflow-hidden"
+            >
+              <div className="h-px bg-slate-50 w-full mb-2" />
+              <input required
+                placeholder="이벤트 제목 (예: 등굣길 간식 사업)"
+                className="w-full rounded-2xl bg-slate-50 p-4 text-[13px] font-bold outline-none border border-transparent focus:border-amber-100 focus:bg-white transition-all shadow-inner"
+                value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})}
+              />
+              <textarea
+                placeholder="이벤트 상세 내용"
+                className="w-full rounded-2xl bg-slate-50 p-4 text-[13px] font-bold outline-none border border-transparent focus:border-amber-100 focus:bg-white transition-all shadow-inner min-h-[100px] resize-none"
+                value={newEvent.content} onChange={e => setNewEvent({...newEvent, content: e.target.value})}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1 px-1">
+                  <label className="text-[10px] font-black text-slate-400 ml-1 uppercase tracking-widest">Event Date</label>
+                  <input type="date"
+                    className="w-full rounded-2xl bg-slate-50 p-4 text-[13px] font-bold outline-none border border-transparent focus:border-amber-100 focus:bg-white transition-all shadow-inner font-mono"
+                    value={newEvent.event_date} onChange={e => setNewEvent({...newEvent, event_date: e.target.value})}
+                  />
+                </div>
+                <div className="flex flex-col gap-1 px-1">
+                  <label className="text-[10px] font-black text-slate-400 ml-1 uppercase tracking-widest">Image URL</label>
+                  <input 
+                    placeholder="https://..."
+                    className="w-full rounded-2xl bg-slate-50 p-4 text-[13px] font-bold outline-none border border-transparent focus:border-amber-100 focus:bg-white transition-all shadow-inner"
+                    value={newEvent.image_url} onChange={e => setNewEvent({...newEvent, image_url: e.target.value})}
+                  />
+                </div>
+              </div>
+              <button disabled={processing} className="py-4 rounded-2xl bg-amber-500 text-white font-black text-sm hover:shadow-xl active:scale-95 transition-all mt-2">
+                {processing ? 'Processing...' : '이벤트 등록하기'}
+              </button>
+            </motion.form>
+          )}
+        </AnimatePresence>
+
+        <div className="flex flex-col gap-3 mt-2">
+          {studentEvents.map(event => (
+            <div key={event.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl group">
+              <div className="flex items-center gap-3 overflow-hidden text-left">
+                <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center text-amber-500 shadow-sm flex-shrink-0">
+                   <Star size={16} className="fill-amber-500" />
+                </div>
+                <div className="flex flex-col overflow-hidden">
+                  <span className="text-[13px] font-black text-slate-700 truncate">{event.title}</span>
+                  <span className="text-[10px] font-bold text-slate-300 truncate">{event.event_date || 'No date'}</span>
+                </div>
+              </div>
+              <button onClick={() => handleDeleteStudentEvent(event.id)} className="p-2 text-slate-200 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+          {studentEvents.length === 0 && (
+            <div className="py-10 text-center">
+               <p className="text-[11px] font-bold text-slate-300 italic uppercase">no active events</p>
             </div>
           )}
         </div>

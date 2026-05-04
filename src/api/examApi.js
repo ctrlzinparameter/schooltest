@@ -280,3 +280,46 @@ export const deleteStudentEvent = async (id) => {
   }
   return true;
 };
+
+/**
+ * 16. 일정 추가 요청 웹후크 전송
+ * @param {object} requestData - { studentInfo, content }
+ */
+export const sendScheduleRequest = async (requestData) => {
+  const WEBHOOK_URL = import.meta.env.VITE_DISCORD_WEBHOOK_URL; 
+  
+  if (!WEBHOOK_URL) {
+    console.warn('Webhook URL is not defined.');
+    return { success: false, message: '웹후크 URL이 설정되지 않았습니다.' };
+  }
+
+  const payload = {
+    embeds: [{
+      title: '📅 일정 추가 요청',
+      color: 5814783, // Indigo color
+      fields: [
+        { name: '👤 신청인 (학번이름)', value: requestData.studentInfo, inline: true },
+        { name: '📝 요청 내용', value: requestData.content }
+      ],
+      timestamp: new Date().toISOString(),
+      footer: { text: 'Cheongmyeong Exam System' }
+    }]
+  };
+
+  try {
+    const response = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.ok) {
+      return { success: true };
+    } else {
+      throw new Error('Webhook request failed');
+    }
+  } catch (error) {
+    console.error('Error sending schedule request:', error);
+    return { success: false, message: '전송 중 오류가 발생했습니다.' };
+  }
+};

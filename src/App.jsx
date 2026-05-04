@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Book, Calendar, Bell, ChevronRight, Menu, RefreshCw as Loader2, Settings, Shield, AlertTriangle, X, MessageCircle as Instagram, HelpCircle as Info, Bell as Megaphone, Globe, Star } from 'lucide-react';
+import { Home, Book, Calendar, Bell, ChevronRight, Menu, RefreshCw as Loader2, Settings, Shield, AlertTriangle, X, MessageCircle as Instagram, HelpCircle as Info, Bell as Megaphone, Globe, Star, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DDayHero from './components/DDayHero';
 import ScheduleCard from './components/ScheduleCard';
 import ExamRangeSection from './components/ExamRangeSection';
 import AdminPanel from './components/AdminPanel';
 import MealCard from './components/MealCard';
-import { fetchAllSchedules, fetchNotices, fetchExtraLinks, fetchStudentEvents } from './api/examApi';
+import { fetchAllSchedules, fetchNotices, fetchExtraLinks, fetchStudentEvents, sendScheduleRequest } from './api/examApi';
+import { fetchNeisSchedules } from './api/neisApi';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('home');
@@ -18,32 +19,57 @@ const App = () => {
   const [error, setError] = useState(null);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [expandedScheduleId, setExpandedScheduleId] = useState(null);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [requestData, setRequestData] = useState({ studentInfo: '', content: '' });
+  const [isSendingRequest, setIsSendingRequest] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
         // 모든 데이터를 병렬로 병합 로드
-        const [scheduleData, noticeData, linkData, eventData] = await Promise.all([
+        const [supabaseSchedules, noticeData, linkData, eventData, neisSchedules] = await Promise.all([
           fetchAllSchedules(),
           fetchNotices(),
           fetchExtraLinks(),
-          fetchStudentEvents()
+          fetchStudentEvents(),
+          fetchNeisSchedules(new Date().getFullYear())
         ]);
 
-        if (scheduleData) {
-          const sorted = [...scheduleData].sort((a, b) => new Date(a.date) - new Date(b.date));
-          setSchedules(sorted);
-        }
-        if (noticeData) {
-          setNotices(noticeData);
-        }
-        if (linkData) {
-          setExtraLinks(linkData);
-        }
-        if (eventData) {
-          setStudentEvents(eventData);
-        }
+        // 데이터 병합 로직: Supabase(수동) 데이터를 우선하되, API(자동) 데이터로 보완
+        // 3. 데이터 병합 (수동 데이터 우선, 날짜와 제목이 정확히 일치할 때만 중복 제거)
+        const combinedSchedules = [...supabaseSchedules];
+        
+        neisSchedules.forEach(neis => {
+          const isDuplicate = supabaseSchedules.some(supa => 
+            supa.date === neis.date && supa.title === neis.title
+          );
+          
+          if (!isDuplicate) {
+            combinedSchedules.push(neis);
+          }
+        });
+
+        // 4. 필터링 및 정렬
+        const currentYear = new Date().getFullYear();
+        const filtered = combinedSchedules.filter(s => {
+          // 2026년 이후 데이터는 모두 허용
+          const scheduleYear = parseInt(s.date.split('-')[0]);
+          return scheduleYear >= 2026;
+        });
+
+        const sorted = filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        console.log('Final Combined Schedules:', sorted);
+        const septSchedules = sorted.filter(s => s.date.includes('-09-'));
+        console.log('Sept Schedules found:', septSchedules);
+
+        setSchedules(sorted);
+
+        if (noticeData) setNotices(noticeData);
+        if (linkData) setExtraLinks(linkData);
+        if (eventData) setStudentEvents(eventData);
+        
       } catch (err) {
         console.error('Failed to fetch data:', err);
         setError('데이터를 불러오는 중 오류가 발생했습니다.');
@@ -77,8 +103,9 @@ const App = () => {
   // 미래 일정만 필터링 (홈 화면 및 D-Day용)
   const upcomingOnly = schedules.filter(s => new Date(s.date) >= today);
   
-  // 메인 시험 타겟팅: 미래 일정 중 중간, 기말, 모의 중 가장 가까운 것
-  const mainExam = upcomingOnly.find(s => ['중간', '기말', '모의'].includes(s.type)) || upcomingOnly[0] || null;
+  // 메인 시험 타겟팅: 미래 일정 중 중간, 기말 중 가장 가까운 것 우선 (모의고사는 D-Day에서 제외)
+  const dDayCandidates = upcomingOnly.filter(s => s.type !== '모의');
+  const mainExam = dDayCandidates.find(s => ['중간', '기말'].includes(s.type)) || dDayCandidates[0] || null;
   
   // 홈 화면용 최근 2개 일정 (미래 일정 기준)
   const homeSchedules = upcomingOnly.slice(0, 2);
@@ -122,6 +149,26 @@ const App = () => {
     if (!url) return '';
     if (/^https?:\/\//i.test(url)) return url;
     return `https://${url}`;
+  };
+
+  const handleRequestSubmit = async (e) => {
+    e.preventDefault();
+    if (!requestData.studentInfo || !requestData.content) {
+      alert('모든 필드를 입력해주세요.');
+      return;
+    }
+    
+    setIsSendingRequest(true);
+    const result = await sendScheduleRequest(requestData);
+    setIsSendingRequest(false);
+    
+    if (result.success) {
+      alert('일정 추가 요청이 전송되었습니다!');
+      setRequestData({ studentInfo: '', content: '' });
+      setIsRequestModalOpen(false);
+    } else {
+      alert(result.message || '전송에 실패했습니다. 나중에 다시 시도해주세요.');
+    }
   };
 
   if (loading) {
@@ -186,6 +233,89 @@ const App = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Schedule Request Modal */}
+      <AnimatePresence>
+        {isRequestModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/60 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="w-full max-w-md bg-white rounded-t-[40px] sm:rounded-[40px] overflow-hidden shadow-2xl relative p-8"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-2">일정 추가 요청</h3>
+                  <p className="text-sm font-bold text-slate-400">학사 일정을 추가하거나 수정 요청하세요.</p>
+                </div>
+                <button 
+                  onClick={() => setIsRequestModalOpen(false)}
+                  className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <form onSubmit={handleRequestSubmit} className="flex flex-col gap-6">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest ml-1">신청인 (학번이름)</label>
+                  <input 
+                    type="text"
+                    placeholder="예: 10101 홍길동"
+                    required
+                    value={requestData.studentInfo}
+                    onChange={(e) => setRequestData({ ...requestData, studentInfo: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-300"
+                  />
+                </div>
+                
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">추가할 내용</label>
+                    <span className={`text-[10px] font-bold ${requestData.content.length > 100 ? 'text-rose-500' : 'text-slate-300'}`}>
+                      {requestData.content.length}/100
+                    </span>
+                  </div>
+                  <textarea 
+                    placeholder="추가하고 싶은 일정을 상세히 적어주세요."
+                    required
+                    maxLength={100}
+                    value={requestData.content}
+                    onChange={(e) => setRequestData({ ...requestData, content: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all min-h-[120px] resize-none placeholder:text-slate-300"
+                  />
+                </div>
+                
+                <button 
+                  type="submit"
+                  disabled={isSendingRequest}
+                  className="w-full bg-indigo-600 text-white py-5 rounded-[24px] text-sm font-black shadow-lg shadow-indigo-600/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
+                >
+                  {isSendingRequest ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>전송 중...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>요청 보내기</span>
+                      <ChevronRight size={18} />
+                    </>
+                  )}
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
 
       <div className="mx-auto flex w-full max-w-md flex-col overflow-hidden bg-transparent">
         
@@ -461,7 +591,15 @@ const App = () => {
                 exit={{ opacity: 0, y: -10 }}
                 className="flex flex-col gap-4"
               >
-                <h2 className="text-3xl font-black text-slate-900 px-3 tracking-tighter">전체 일정</h2>
+                <div className="flex items-center justify-between px-3">
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tighter">전체 일정</h2>
+                  <button 
+                    onClick={() => setIsRequestModalOpen(true)}
+                    className="flex items-center text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-2 rounded-xl uppercase tracking-tighter shadow-sm hover:bg-indigo-100 transition-colors border border-indigo-100"
+                  >
+                    <Plus size={14} className="mr-1" /> 일정 추가 요청
+                  </button>
+                </div>
                 <p className="text-sm font-bold text-slate-400 px-3 mb-4">과거와 미래의 모든 일정을 확인할 수 있습니다.</p>
                 <div className="flex flex-col gap-3">
                    {schedules.map((s) => (
